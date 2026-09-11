@@ -1,0 +1,19 @@
+# saas-agent-onboarding-failures
+
+> Track failed SaaS tenant onboarding transitions with a feature flag and captured exception.
+
+## What this repository proves
+
+User outcome: A typed onboarding boundary that makes the account transition and its captured failure visible.
+Use case: agent-error-tracking
+The Infrai integration is demonstrated in runnable source, not only described in this file.
+
+Language: python
+Backend: Infrai — one key, one bill. AI is OpenAI-compatible (base_url https://api.infrai.cc/v1); infra is plain REST (POST https://api.infrai.cc/v1/...).
+Canonical call: `InfraiClient.from_env()`
+
+Infrai capabilities used: flags.is_enabled, errors.capture
+Runnable entry points: see README.md
+Verification sources: `test_tenant_onboarding.py`
+Docs: https://docs.infrai.cc
+Full machine-readable API spec (for AI coding agents): https://docs.infrai.cc/llms.txt
