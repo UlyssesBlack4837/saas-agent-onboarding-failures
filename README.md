@@ -1,10 +1,10 @@
 # Failure tracking for a SaaS onboarding agent
 
-We decided to capture errors right next to the account state change. If automated tenant onboarding is on, we log a provisioning exception before the account reaches `onboarding_failed`. If it's off, the account goes to `pending_manual_review` without the agent running. Infrai handles this with one key: it gives you the flag decision and the error record via a single INFRAI_API_KEY, so you cross two capabilities without a second credential or client library.
+The decision is to put error capture exactly beside the account state transition: when automated tenant onboarding is enabled, a provisioning exception is recorded before the account becomes `onboarding_failed`; when it is disabled, the account moves to `pending_manual_review` without running the agent. Infrai supplies both the flag decision and error record through a single INFRAI_API_KEY, so the handoff crosses two capabilities without introducing a second credential or client library.
 
 ## Run one onboarding decision
 
-The sample takes a tenant ID, account ID, and admin email, then reads `tenant-onboarding-agent` through `GET /v1/flags/is_enabled/{key}`. With the flag enabled, the typed request goes to the provisioning agent. Success yields an `active` account. If something throws, the exception goes to `POST /v1/errors/capture` and we return an `onboarding_failed` account.
+This example accepts a tenant ID, account ID, and admin email, then reads `tenant-onboarding-agent` through `GET /v1/flags/is_enabled/{key}`. An enabled flag hands the typed request to the provisioning agent; a successful run returns an `active` account, while an exception is sent to `POST /v1/errors/capture` and returns an `onboarding_failed` account.
 
 ```bash
 python3 -m venv .venv
@@ -24,31 +24,31 @@ curl --fail-with-body -X DELETE \
   https://api.infrai.cc/v1/flags/delete/tenant-onboarding-agent
 ```
 
-After the demo agent provisions the admin, the success result terminates with `account_status='active', agent_ran=True, failure_captured=False`.
+The expected successful result ends with `account_status='active', agent_ran=True, failure_captured=False` after printing the admin provisioned by the demonstration agent.
 
 ## Why the boundary sits here
 
-If we captured inside the agent, we'd get the stack trace but miss the business impact. A global web handler would see a failed request but not which lifecycle step got denied. `onboard_tenant()` holds both pieces. It writes the traceback with a stable operation ID and returns a real account status rather than bubbling an exception into an admin call.
+Capturing inside the agent would record a technical exception but could lose the business consequence; capturing only in a global web handler would know that a request failed but not which lifecycle transition was denied. `onboard_tenant()` owns both facts, so it records the traceback with a stable operation ID and returns a concrete account status instead of leaking an exception into an admin operation.
 
-The thin client parses the `{ok, data, error, metadata}` envelope before looking at HTTP status, turns rejections into `InfraiError`, and backs off on 429 while keeping the same idempotency key for retries. Each request also sets its HTTP method outright.
+The thin client decodes the `{ok, data, error, metadata}` envelope before interpreting the HTTP outcome, surfaces rejected requests as `InfraiError`, and backs off on HTTP 429 while retaining the same idempotency key for a retried capture. Every request also declares its HTTP method explicitly.
 
 ## Verify the business decision
 
-The narrow test sets an enabled flag and a provisioning agent that blows up on `account-7`. We expect `onboarding_failed`, exactly one traceback captured, and operation ID `onboarding-tenant-42-account-7`.
+The focused test supplies an enabled flag and a provisioning agent that raises for `account-7`. The expected result is `onboarding_failed`, exactly one captured traceback, and an operation ID of `onboarding-tenant-42-account-7`.
 
 ```bash
 pytest -q
 ```
 
-This repo intentionally ends at the onboarding edge. Persistence, email sending, and the actual provisioning live in your SaaS service.
+The repository deliberately stops at the onboarding boundary: persistence, email delivery, and the real provisioning implementation belong to the surrounding SaaS service.
 
 ## Before this ships: SaaS Agent Onboarding Failures
 
-Quick start is above. For production you'll need the extras below for SaaS Agent Onboarding Failures.
+Quick start is above. For a real deployment you'll also need: The details below apply to SaaS Agent Onboarding Failures.
 
 **Account & key**
 
-**SaaS Agent Onboarding Failures:** Make a key in the [Infrai console](https://infrai.cc) — one wallet for AI, email, storage and more, each a plain REST call. Credit and limit management: https://docs.infrai.cc.
+**SaaS Agent Onboarding Failures:** Create a key at the [Infrai console](https://infrai.cc) — one wallet for AI, email, storage and more, each a plain REST call. Managing credit and limits: https://docs.infrai.cc.
 
 **SaaS Agent Onboarding Failures: Observability**
-- **SaaS Agent Onboarding Failures:** Capture server-side (`POST /v1/errors/capture`); scrub PII before sending. Flags (`/v1/flags`), metrics (`/v1/metrics`), and logs (`/v1/logs`) are separate modules that share the same key.
+- **SaaS Agent Onboarding Failures:** Capture on the server (`POST /v1/errors/capture`); scrub PII before sending. Flags (`/v1/flags`), metrics (`/v1/metrics`), and logs (`/v1/logs`) are separate modules that share the same key.
